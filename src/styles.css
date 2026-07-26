@@ -21,6 +21,7 @@ h1 { margin: 10px 0 14px; font-size: clamp(2.4rem, 7vw, 5.2rem); line-height: 0.
 .upload { min-height: 170px; display: grid; place-content: center; text-align: center; gap: 8px; border-style: dashed; cursor: pointer; }
 .upload strong { font-size: 1.25rem; }
 .upload span, .status { color: #95a2bb; }
+.player { width: 100%; margin-top: 16px; }
 .actions { display: flex; align-items: center; gap: 16px; margin: 20px 0 34px; flex-wrap: wrap; }
 .results { display: grid; gap: 20px; }
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -30,13 +31,17 @@ h1 { margin: 10px 0 14px; font-size: clamp(2.4rem, 7vw, 5.2rem); line-height: 0.
 .panelTitle { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .panelTitle h2 { margin: 0; }
 .panelTitle span { color: #8f9bb2; font-size: .85rem; }
-.chords { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin-top: 18px; }
-.chord { display: grid; gap: 5px; padding: 14px; background: #0c1220; border-radius: 14px; }
-.chord strong { font-size: 1.2rem; }
+.timeline { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; margin-top: 18px; }
+.chord { display: grid; gap: 7px; padding: 13px; background: #0c1220; border: 1px solid transparent; border-radius: 14px; cursor: pointer; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+.chord:hover { transform: translateY(-2px); border-color: rgba(140,169,255,.35); }
+.chord.active { background: #1a2850; border-color: #8ca9ff; box-shadow: 0 0 0 2px rgba(140,169,255,.12); }
+.chord input { width: 100%; border: 0; border-bottom: 1px solid rgba(163,184,255,.18); outline: 0; padding: 2px 0 7px; background: transparent; color: #edf2ff; font-size: 1.2rem; font-weight: 800; }
+.chord input:focus { border-bottom-color: #8ca9ff; }
 .chord span, .chord small { color: #7f8ca5; }
-pre { margin: 18px 0 0; padding: 18px; overflow: auto; border-radius: 14px; background: #080d18; color: #cfe0ff; line-height: 1.7; }
+pre { margin: 18px 0 0; padding: 18px; overflow: auto; border-radius: 14px; background: #080d18; color: #cfe0ff; line-height: 1.7; white-space: pre-wrap; }
 
 @media (max-width: 720px) {
   .shell { padding-top: 38px; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
+  .timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
