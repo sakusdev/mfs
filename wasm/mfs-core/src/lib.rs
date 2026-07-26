@@ -34,6 +34,12 @@ struct AnalysisResult {
     beat_offset: f32,
     #[serde(rename = "beatsPerBar")]
     beats_per_bar: usize,
+    #[serde(rename = "beatUnit")]
+    beat_unit: usize,
+    #[serde(rename = "timeSignature")]
+    time_signature: String,
+    #[serde(rename = "meterConfidence")]
+    meter_confidence: f32,
     chords: Vec<ChordSegment>,
 }
 
@@ -111,12 +117,15 @@ fn estimate_tempo(samples: &[f32], sample_rate: u32) -> (f32, Vec<f32>) {
         let lag = ((60.0 / bpm as f32) * 100.0).round() as usize;
         if lag == 0 || lag >= onset.len() { continue; }
         let score: f32 = onset.iter().skip(lag).zip(onset.iter()).map(|(a,b)| a*b).sum();
-        if score > best.1 { best = (bpm as f32, score); }
+        let harmonic = if lag * 2 < onset.len() {
+            onset.iter().skip(lag * 2).zip(onset.iter()).map(|(a,b)| a*b).sum::<f32>() * 0.3
+        } else { 0.0 };
+        if score + harmonic > best.1 { best = (bpm as f32, score + harmonic); }
     }
     (best.0, onset)
 }
 
-fn estimate_beat_offset(onset: &[f32], tempo: f32) -> f32 {
+fn estimate_beat_phase(onset: &[f32], tempo: f32) -> (usize, usize) {
     let period = ((60.0 / tempo.max(1.0)) * 100.0).round().max(1.0) as usize;
     let mut best = (0usize, f32::MIN);
     for phase in 0..period {
@@ -125,7 +134,55 @@ fn estimate_beat_offset(onset: &[f32], tempo: f32) -> f32 {
         while index < onset.len() { score += onset[index]; index += period; }
         if score > best.1 { best = (phase, score); }
     }
-    best.0 as f32 / 100.0
+    (best.0, period)
+}
+
+fn beat_strengths(onset: &[f32], phase: usize, period: usize) -> Vec<f32> {
+    let radius = (period / 8).max(1);
+    let mut strengths = Vec::new();
+    let mut center = phase;
+    while center < onset.len() {
+        let start = center.saturating_sub(radius);
+        let end = (center + radius + 1).min(onset.len());
+        strengths.push(onset[start..end].iter().sum());
+        center += period;
+    }
+    strengths
+}
+
+fn estimate_meter(strengths: &[f32]) -> (usize, usize, usize, f32) {
+    let candidates = [(3usize, 4usize), (4, 4), (6, 8)];
+    let mut ranked = Vec::new();
+    for (beats, unit) in candidates {
+        let mut best_phase = 0usize;
+        let mut best_score = f32::MIN;
+        for phase in 0..beats {
+            let mut down = 0.0;
+            let mut other = 0.0;
+            let mut down_count = 0usize;
+            let mut other_count = 0usize;
+            for (i, value) in strengths.iter().enumerate() {
+                if i % beats == phase { down += *value; down_count += 1; }
+                else { other += *value; other_count += 1; }
+            }
+            let down_mean = down / down_count.max(1) as f32;
+            let other_mean = other / other_count.max(1) as f32;
+            let mut score = down_mean - other_mean * 0.7;
+            if beats == 6 {
+                let secondary_phase = (phase + 3) % 6;
+                let secondary: Vec<f32> = strengths.iter().enumerate().filter_map(|(i,v)| (i % 6 == secondary_phase).then_some(*v)).collect();
+                score += secondary.iter().sum::<f32>() / secondary.len().max(1) as f32 * 0.2;
+            }
+            if score > best_score { best_score = score; best_phase = phase; }
+        }
+        ranked.push((beats, unit, best_phase, best_score));
+    }
+    ranked.sort_by(|a,b| b.3.total_cmp(&a.3));
+    let best = ranked[0];
+    let second = ranked.get(1).copied().unwrap_or(best);
+    let scale = best.3.abs().max(second.3.abs()).max(1e-6);
+    let confidence = (0.5 + (best.3 - second.3) / scale * 0.35).clamp(0.05, 0.98);
+    (best.0, best.1, best.2, confidence)
 }
 
 fn estimate_key(chroma: &[f32; 12]) -> String {
@@ -139,12 +196,19 @@ fn estimate_key(chroma: &[f32; 12]) -> String {
     format!("{} {}", NOTE_NAMES[best.0], if best.1 { "major" } else { "minor" })
 }
 
-fn top_candidates(scores: &[f32], templates: &[ChordTemplate]) -> Vec<ChordCandidate> {
+fn chord_name_with_bass(template: &ChordTemplate, bass: &[f32; 12]) -> String {
+    let (bass_note, strength) = bass.iter().copied().enumerate().max_by(|a,b| a.1.total_cmp(&b.1)).unwrap_or((template.root, 0.0));
+    if strength >= 0.24 && bass_note != template.root && template.tones[bass_note] > 0.0 {
+        format!("{}/{}", template.name, NOTE_NAMES[bass_note])
+    } else { template.name.clone() }
+}
+
+fn top_candidates(scores: &[f32], templates: &[ChordTemplate], bass: &[f32; 12]) -> Vec<ChordCandidate> {
     let mut ranked: Vec<(usize,f32)> = scores.iter().copied().enumerate().collect();
     ranked.sort_by(|a,b| b.1.total_cmp(&a.1));
     let max = ranked.first().map(|x| x.1).unwrap_or(0.0);
     ranked.into_iter().take(3).map(|(index,score)| ChordCandidate {
-        chord: templates[index].name.clone(),
+        chord: chord_name_with_bass(&templates[index], bass),
         confidence: (0.5 + (score-max) * 0.25).clamp(0.05,0.99),
     }).collect()
 }
@@ -154,7 +218,10 @@ pub fn analyze_audio(samples: &[f32], sample_rate: u32) -> String {
     let duration = samples.len() as f32 / sample_rate.max(1) as f32;
     let (tempo, onset) = estimate_tempo(samples, sample_rate);
     let beat_duration = 60.0 / tempo.max(1.0);
-    let beat_offset = estimate_beat_offset(&onset, tempo).min(duration);
+    let (beat_phase, beat_period) = estimate_beat_phase(&onset, tempo);
+    let strengths = beat_strengths(&onset, beat_phase, beat_period);
+    let (beats_per_bar, beat_unit, downbeat_phase, meter_confidence) = estimate_meter(&strengths);
+    let beat_offset = ((beat_phase as f32 / 100.0) + downbeat_phase as f32 * beat_duration).min(duration);
     let analysis_step = (beat_duration / 2.0).clamp(0.18, 0.75);
     let segment_samples = (sample_rate as f32 * analysis_step).round().max(2048.0) as usize;
     let offset_samples = (beat_offset * sample_rate as f32) as usize;
@@ -196,23 +263,35 @@ pub fn analyze_audio(samples: &[f32], sample_rate: u32) -> String {
         for t in (1..frames).rev() { state = back[t][state]; path[t-1] = state; }
     }
 
-    let beats_per_bar = 4usize;
     let chords = path.into_iter().enumerate().map(|(index,state)| {
         let start = beat_offset + index as f32 * analysis_step;
-        let half_beat = index;
-        let beat_index = half_beat / 2;
-        let alternatives = top_candidates(&emissions[index], &templates);
+        let beat_index = index / 2;
+        let bass = &features[index].1;
+        let selected_name = chord_name_with_bass(&templates[state], bass);
+        let alternatives = top_candidates(&emissions[index], &templates, bass);
         ChordSegment {
             start,
             end: (start + analysis_step).min(duration),
-            chord: templates[state].name.clone(),
-            confidence: alternatives.iter().find(|c| c.chord == templates[state].name).map(|c| c.confidence).unwrap_or(0.5),
+            chord: selected_name.clone(),
+            confidence: alternatives.iter().find(|c| c.chord == selected_name).map(|c| c.confidence).unwrap_or(0.5),
             candidates: alternatives,
             bar: beat_index / beats_per_bar + 1,
             beat: beat_index % beats_per_bar + 1,
         }
     }).collect();
 
-    let result = AnalysisResult { duration, sample_rate, tempo, key: estimate_key(&global_chroma), beat_duration, beat_offset, beats_per_bar, chords };
+    let result = AnalysisResult {
+        duration,
+        sample_rate,
+        tempo,
+        key: estimate_key(&global_chroma),
+        beat_duration,
+        beat_offset,
+        beats_per_bar,
+        beat_unit,
+        time_signature: format!("{}/{}", beats_per_bar, beat_unit),
+        meter_confidence,
+        chords,
+    };
     serde_json::to_string(&result).unwrap_or_else(|_| "{\"error\":\"serialization failed\"}".to_string())
 }
