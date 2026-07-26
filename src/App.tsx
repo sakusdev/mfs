@@ -18,6 +18,9 @@ type AnalysisResult = {
   beatDuration: number;
   beatOffset: number;
   beatsPerBar: number;
+  beatUnit: number;
+  timeSignature: string;
+  meterConfidence: number;
   chords: ChordSegment[];
 };
 
@@ -59,7 +62,7 @@ export default function App() {
       bars.set(item.bar, values);
     }
     const body = [...bars.values()].map((items) => `| ${items.join(" ")} `).join("") + "|";
-    return `{title: ${file?.name ?? "Unknown"}}\n{key: ${result.key}}\n{tempo: ${Math.round(result.tempo)}}\n{time: ${result.beatsPerBar}/4}\n\n${body}`;
+    return `{title: ${file?.name ?? "Unknown"}}\n{key: ${result.key}}\n{tempo: ${Math.round(result.tempo)}}\n{time: ${result.timeSignature}}\n\n${body}`;
   }, [file, result]);
 
   function selectFile(next: File | null) {
@@ -85,12 +88,12 @@ export default function App() {
         for (let i = 0; i < mono.length; i += 1) mono[i] += data[i] / decoded.numberOfChannels;
       }
       await context.close();
-      setStatus("ビート開始位置・小節・コード候補をWASMで解析中…");
+      setStatus("拍子・ダウンビート・オンコードをWASMで解析中…");
       const worker = new Worker(new URL("./audio/analysis-worker.ts", import.meta.url), { type: "module" });
       worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
         if (event.data.type === "result") {
           setResult(event.data.result);
-          setStatus("解析完了。候補ボタンでコードをすぐ修正できます");
+          setStatus("解析完了。拍子とオンコード候補を確認できます");
         } else {
           setStatus(`解析失敗: ${event.data.message}`);
         }
@@ -132,7 +135,7 @@ export default function App() {
       <section className="hero">
         <p className="eyebrow">MFS / Music From Sound</p>
         <h1>音源を、ブラウザだけでコード譜へ。</h1>
-        <p className="lead">音源は送信せず、ビート位相・低域・コード遷移を端末内のRust/WASMで解析します。</p>
+        <p className="lead">音源は送信せず、拍子・ダウンビート・低音・コード遷移を端末内のRust/WASMで解析します。</p>
       </section>
 
       <section className="panel upload" onClick={() => inputRef.current?.click()}>
@@ -153,16 +156,16 @@ export default function App() {
           <div className="metrics">
             <article><span>BPM</span><strong>{Math.round(result.tempo)}</strong></article>
             <article><span>Key</span><strong>{result.key}</strong></article>
-            <article><span>Beat offset</span><strong>{result.beatOffset.toFixed(2)} sec</strong></article>
-            <article><span>Duration</span><strong>{formatTime(result.duration)}</strong></article>
+            <article><span>拍子</span><strong>{result.timeSignature}</strong><small>{Math.round(result.meterConfidence * 100)}%</small></article>
+            <article><span>小節頭</span><strong>{result.beatOffset.toFixed(2)} sec</strong></article>
           </div>
 
           <div className="panel">
-            <div className="panelTitle"><h2>小節・拍同期タイムライン</h2><span>{result.chords.length} frames</span></div>
+            <div className="panelTitle"><h2>小節・拍同期タイムライン</h2><span>{result.chords.length} frames / オンコード対応</span></div>
             <div className="timeline">
               {result.chords.map((item, index) => (
                 <div className={`chord ${activeChordIndex === index ? "active" : ""} ${item.beat === 1 ? "barStart" : ""}`} key={`${item.start}-${index}`} onClick={() => seekTo(item.start)}>
-                  <div className="position"><b>{item.bar}</b><span>{item.beat}</span></div>
+                  <div className="position"><b>{item.bar}</b><span>{item.beat}/{result.beatsPerBar}</span></div>
                   <input value={item.chord} onClick={(event) => event.stopPropagation()} onChange={(event) => editChord(index, event.target.value)} />
                   <div className="candidates" onClick={(event) => event.stopPropagation()}>
                     {item.candidates.map((candidate) => (
