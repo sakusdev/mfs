@@ -38,6 +38,13 @@ h1 { margin: 10px 0 14px; font-size: clamp(2.4rem, 7vw, 5.2rem); line-height: .9
 .toolbar { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .toolbar > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .toolbar b { margin-right: 4px; color: #cfe0ff; }
+.pianoRoll { display: block; width: 100%; height: 280px; margin-top: 18px; border: 1px solid rgba(163,184,255,.14); border-radius: 16px; cursor: crosshair; }
+.melodyNotes { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 8px; max-height: 310px; overflow: auto; margin-top: 14px; padding-right: 4px; }
+.melodyNote { display: grid; grid-template-columns: 48px 1fr; gap: 4px 8px; align-items: center; padding: 10px; border: 1px solid rgba(163,184,255,.12); border-radius: 12px; background: #0c1220; cursor: pointer; }
+.melodyNote.active { border-color: #8ca9ff; background: #1a2850; }
+.melodyNote input { grid-row: 1 / span 2; width: 48px; padding: 6px 4px; border: 0; border-radius: 8px; background: #1a2238; color: #edf2ff; font-weight: 800; }
+.melodyNote strong { font-size: 1.05rem; }
+.melodyNote span, .melodyNote small { color: #7f8ca5; font-size: .75rem; }
 .timeline { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; margin-top: 18px; }
 .chord { display: grid; gap: 7px; padding: 13px; background: #0c1220; border: 1px solid transparent; border-radius: 14px; cursor: pointer; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
 .chord:hover { transform: translateY(-2px); border-color: rgba(140,169,255,.35); }
@@ -60,6 +67,7 @@ pre { margin: 18px 0 0; padding: 18px; overflow: auto; border-radius: 14px; back
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .waveform { height: 92px; }
+  .pianoRoll { height: 220px; }
   .panelTitle { align-items: flex-start; flex-direction: column; }
 }
 
