@@ -35,10 +35,16 @@ h1 { margin: 10px 0 14px; font-size: clamp(2.4rem, 7vw, 5.2rem); line-height: .9
 .panelTitle { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .panelTitle h2 { margin: 0; }
 .panelTitle span { color: #8f9bb2; font-size: .85rem; }
+.panelButtons { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .toolbar { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .toolbar > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .toolbar b { margin-right: 4px; color: #cfe0ff; }
 .pianoRoll { display: block; width: 100%; height: 280px; margin-top: 18px; border: 1px solid rgba(163,184,255,.14); border-radius: 16px; cursor: crosshair; }
+.staffPreview { position: relative; height: 150px; margin-top: 18px; overflow: hidden; border: 1px solid rgba(163,184,255,.14); border-radius: 16px; background: linear-gradient(#10182a, #0b1120); }
+.staffPreview i { position: absolute; left: 0; right: 0; height: 1px; background: rgba(215,225,255,.28); pointer-events: none; }
+.staffNote { position: absolute; width: 13px; height: 10px; padding: 0; transform: translate(-50%, -50%) rotate(-18deg); border-radius: 50%; background: #d8e2ff; box-shadow: 0 0 0 2px rgba(140,169,255,.18); }
+.staffNote::after { content: ""; position: absolute; right: -2px; bottom: 4px; width: 1px; height: 26px; background: #d8e2ff; transform: rotate(18deg); transform-origin: bottom; }
+.staffNote span { position: absolute; left: 50%; top: 15px; transform: translateX(-50%) rotate(18deg); color: #9faccc; font-size: .58rem; white-space: nowrap; }
 .melodyNotes { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 8px; max-height: 310px; overflow: auto; margin-top: 14px; padding-right: 4px; }
 .melodyNote { display: grid; grid-template-columns: 48px 1fr; gap: 4px 8px; align-items: center; padding: 10px; border: 1px solid rgba(163,184,255,.12); border-radius: 12px; background: #0c1220; cursor: pointer; }
 .melodyNote.active { border-color: #8ca9ff; background: #1a2850; }
@@ -68,6 +74,7 @@ pre { margin: 18px 0 0; padding: 18px; overflow: auto; border-radius: 14px; back
   .timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .waveform { height: 92px; }
   .pianoRoll { height: 220px; }
+  .staffPreview { height: 125px; }
   .panelTitle { align-items: flex-start; flex-direction: column; }
 }
 
@@ -75,5 +82,5 @@ pre { margin: 18px 0 0; padding: 18px; overflow: auto; border-radius: 14px; back
   .timeline { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: 1fr 1fr; }
   button { width: 100%; }
-  .toolbar button, .candidates button, .exportActions button { width: auto; }
+  .toolbar button, .candidates button, .exportActions button, .panelButtons button { width: auto; }
 }
