@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 export type MelodyNote = {
   start: number;
@@ -15,6 +15,56 @@ export function midiName(midi: number): string {
   return `${NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
 }
 
+function refreshNote(note: MelodyNote, midi: number): MelodyNote {
+  return { ...note, midi, note: midiName(midi), frequency: 440 * 2 ** ((midi - 69) / 12) };
+}
+
+function simplifyNotes(notes: MelodyNote[]): MelodyNote[] {
+  if (!notes.length) return [];
+  const cleaned = notes.filter((note) => note.end - note.start >= 0.07 && note.confidence >= 0.28);
+  const corrected = cleaned.map((note, index, all) => {
+    const previous = all[index - 1];
+    const next = all[index + 1];
+    if (!previous || !next) return note;
+    const isolated = Math.abs(note.midi - previous.midi) >= 9 && Math.abs(note.midi - next.midi) >= 9;
+    const neighboursAgree = Math.abs(previous.midi - next.midi) <= 2;
+    if (isolated && neighboursAgree && note.end - note.start < 0.2) {
+      return refreshNote(note, Math.round((previous.midi + next.midi) / 2));
+    }
+    return note;
+  });
+  const output: MelodyNote[] = [];
+  for (const note of corrected) {
+    const previous = output.at(-1);
+    if (previous && previous.midi === note.midi && note.start - previous.end <= 0.08) {
+      previous.end = Math.max(previous.end, note.end);
+      previous.confidence = Math.max(previous.confidence, note.confidence);
+    } else output.push({ ...note });
+  }
+  return output;
+}
+
+function StaffPreview({ notes, duration, onSeek }: { notes: MelodyNote[]; duration: number; onSeek: (seconds: number) => void }) {
+  const visible = notes.slice(0, 160);
+  const minimum = Math.min(...visible.map((note) => note.midi), 60);
+  const maximum = Math.max(...visible.map((note) => note.midi), 72);
+  const range = Math.max(12, maximum - minimum);
+  return <div className="staffPreview" aria-label="簡易五線譜">
+    {[0, 1, 2, 3, 4].map((line) => <i key={line} style={{ top: `${22 + line * 14}%` }} />)}
+    {visible.map((note, index) => {
+      const left = duration > 0 ? note.start / duration * 100 : 0;
+      const top = 82 - (note.midi - minimum) / range * 68;
+      return <button
+        key={`${note.start}-${index}`}
+        className="staffNote"
+        title={`${note.note} ${note.start.toFixed(2)}s`}
+        style={{ left: `${Math.min(98, Math.max(1, left))}%`, top: `${Math.min(90, Math.max(5, top))}%` }}
+        onClick={() => onSeek(note.start)}
+      ><span>{note.note}</span></button>;
+    })}
+  </div>;
+}
+
 export default function MelodyPanel({ notes, duration, currentTime, onSeek, onChange }: {
   notes: MelodyNote[];
   duration: number;
@@ -25,6 +75,7 @@ export default function MelodyPanel({ notes, duration, currentTime, onSeek, onCh
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimum = Math.min(...notes.map((note) => note.midi), 48) - 2;
   const maximum = Math.max(...notes.map((note) => note.midi), 72) + 2;
+  const averageConfidence = useMemo(() => notes.length ? notes.reduce((sum, note) => sum + note.confidence, 0) / notes.length : 0, [notes]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -60,7 +111,14 @@ export default function MelodyPanel({ notes, duration, currentTime, onSeek, onCh
   }, [currentTime, duration, maximum, minimum, notes]);
 
   return <div className="panel melodyPanel">
-    <div className="panelTitle"><h2>メロディ</h2><span>{notes.length} notes / 主旋律推定</span></div>
+    <div className="panelTitle">
+      <h2>メロディ</h2>
+      <div className="panelButtons">
+        <span>{notes.length} notes / 平均{Math.round(averageConfidence * 100)}%</span>
+        <button className="secondary" disabled={!notes.length} onClick={() => onChange(simplifyNotes(notes))}>ノイズ音を整理</button>
+      </div>
+    </div>
+    <StaffPreview notes={notes} duration={duration} onSeek={onSeek} />
     <canvas ref={canvasRef} className="pianoRoll" onClick={(event) => {
       const rect = event.currentTarget.getBoundingClientRect();
       onSeek((event.clientX - rect.left) / rect.width * duration);
@@ -69,7 +127,7 @@ export default function MelodyPanel({ notes, duration, currentTime, onSeek, onCh
       {notes.map((note, index) => <div className={`melodyNote ${currentTime >= note.start && currentTime < note.end ? "active" : ""}`} key={`${note.start}-${index}`} onClick={() => onSeek(note.start)}>
         <input type="number" min="24" max="108" value={note.midi} onClick={(event) => event.stopPropagation()} onChange={(event) => {
           const midi = Math.max(24, Math.min(108, Number(event.target.value)));
-          onChange(notes.map((item, itemIndex) => itemIndex === index ? { ...item, midi, note: midiName(midi), frequency: 440 * 2 ** ((midi - 69) / 12) } : item));
+          onChange(notes.map((item, itemIndex) => itemIndex === index ? refreshNote(item, midi) : item));
         }} />
         <strong>{note.note}</strong>
         <span>{note.start.toFixed(2)}–{note.end.toFixed(2)}s</span>
