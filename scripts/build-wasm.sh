@@ -21,3 +21,8 @@ wasm-pack build wasm/mfs-core \
   --target web \
   --out-dir ../../src/wasm/pkg \
   --release
+
+wasm-pack build wasm/melody-core \
+  --target web \
+  --out-dir ../../src/wasm/melody-pkg \
+  --release
