@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:wasm": "wasm-pack build wasm/mfs-core --target web --out-dir ../../src/wasm/pkg --release",
+    "build:wasm": "bash scripts/build-wasm.sh",
     "build": "npm run build:wasm && tsc -b && vite build",
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc -b"
