@@ -2,6 +2,9 @@
 name = "mfs-core"
 version = "0.1.0"
 edition = "2021"
+description = "Browser-local music analysis core for MFS"
+repository = "https://github.com/sakusdev/mfs"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib"]
